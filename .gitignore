@@ -8,34 +8,31 @@ __pycache__/
 *.egg-info/
 dist/
 build/
-.eggs/
-*.whl
+*.spec
 
 # Virtual environments
-.env
-.venv
-env/
+.venv/
 venv/
-ENV/
+env_local/
+.env
 
-# Results / outputs
+# Environment / secrets
+.env
+*.env.local
+
+# Results / artifacts
 baseline_results.json
 inference_results.json
-*.log
 
 # IDE
 .vscode/
 .idea/
-*.sublime-project
-*.sublime-workspace
+*.swp
+*.swo
 
 # OS
 .DS_Store
 Thumbs.db
-desktop.ini
 
 # Docker
-.dockerignore
-
-# Temporary test file
-_test_endpoints.py
+*.tar
