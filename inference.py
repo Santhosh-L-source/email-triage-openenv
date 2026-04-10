@@ -33,9 +33,12 @@ import requests
 # Configuration — read from environment variables (mandatory)
 # ---------------------------------------------------------------------------
 
-API_BASE_URL: str = os.environ.get("API_BASE_URL", "https://api.openai.com/v1")
-MODEL_NAME: str   = os.environ.get("MODEL_NAME",   "gpt-4o-mini")
-HF_TOKEN: str     = os.environ.get("HF_TOKEN",     "")
+API_BASE_URL = os.getenv("API_BASE_URL", "https://api.openai.com/v1")
+MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4o-mini")
+HF_TOKEN = os.getenv("HF_TOKEN")
+
+# Optional -- if you use from_docker_image():
+LOCAL_IMAGE_NAME = os.getenv("LOCAL_IMAGE_NAME")
 
 ENV_BASE_URL: str = "http://localhost:7860"
 SEED: int         = 42
@@ -171,7 +174,7 @@ def run_task(task_id: str, base_url: str, client: Any) -> Dict[str, Any]:
         try:
             action = query_llm(client, obs, task_id)
         except Exception as exc:
-            print(f"[WARN] LLM error at step {step}: {exc} — using fallback action", flush=True)
+            print(f"[WARN] LLM error at step {step}: {exc} -- using fallback action", flush=True)
             action = {
                 "email_id":    obs["email_id"],
                 "label":       "work",
@@ -285,7 +288,7 @@ def main() -> None:
         results.append(result)
 
     # Summary table
-    print("\n" + "━" * 62, flush=True)
+    print("\n" + "=" * 62, flush=True)
     print(f"  {'Task':<38} {'Score':>7}  {'Steps':>5}", flush=True)
     print("  " + "-" * 58, flush=True)
     for res in results:
@@ -293,7 +296,7 @@ def main() -> None:
     avg = sum(r["score"] for r in results) / len(results)
     print("  " + "-" * 58, flush=True)
     print(f"  {'AVERAGE':<38} {avg:>7.4f}", flush=True)
-    print("━" * 62 + "\n", flush=True)
+    print("=" * 62 + "\n", flush=True)
 
     # Persist machine-readable results
     out_path = "inference_results.json"
