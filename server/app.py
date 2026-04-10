@@ -291,3 +291,18 @@ async def _query_llm(client: Any, obs: EmailObservation, task_id: str) -> EmailA
             draft_reply=None,
             archive=False,
         )
+
+
+def main() -> None:
+    """Entry point for multi-mode deployment."""
+    import uvicorn
+    uvicorn.run(
+        "server.app:app",
+        host="0.0.0.0",
+        port=7860,
+        reload=False,
+    )
+
+
+if __name__ == "__main__":
+    main()
