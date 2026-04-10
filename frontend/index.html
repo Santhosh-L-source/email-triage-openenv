@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Email Triage — OpenEnv Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    /* ── Reset & Variables ─────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0b0d14;
+      --bg2:       #12141f;
+      --glass:     rgba(255,255,255,0.04);
+      --glass-b:   rgba(255,255,255,0.09);
+      --border:    rgba(255,255,255,0.08);
+      --accent:    #6366f1;
+      --accent2:   #818cf8;
+      --green:     #22c55e;
+      --yellow:    #eab308;
+      --red:       #ef4444;
+      --orange:    #f97316;
+      --text:      #e2e8f0;
+      --text2:     #94a3b8;
+      --text3:     #475569;
+      --radius:    14px;
+      --radius-sm: 8px;
+      --shadow:    0 8px 32px rgba(0,0,0,0.5);
+    }
+
+    html, body {
+      height: 100%;
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      overflow-x: hidden;
+    }
+
+    /* ── Background glow orbs ──────────────────────────── */
+    body::before, body::after {
+      content: '';
+      position: fixed;
+      border-radius: 50%;
+      filter: blur(120px);
+      pointer-events: none;
+      z-index: 0;
+    }
+    body::before {
+      width: 600px; height: 600px;
+      background: radial-gradient(circle, rgba(99,102,241,0.15), transparent 70%);
+      top: -200px; left: -200px;
+    }
+    body::after {
+      width: 500px; height: 500px;
+      background: radial-gradient(circle, rgba(139,92,246,0.12), transparent 70%);
+      bottom: -150px; right: -150px;
+    }
+
+    /* ── Layout ───────────────────────────────────────── */
+    .app { position: relative; z-index: 1; min-height: 100vh; display: flex; flex-direction: column; }
+
+    /* ── Top Bar ──────────────────────────────────────── */
+    .topbar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 28px;
+      background: rgba(11,13,20,0.85);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 100;
+    }
+    .topbar-brand { display: flex; align-items: center; gap: 10px; }
+    .topbar-brand .logo { font-size: 22px; }
+    .topbar-brand h1 { font-size: 17px; font-weight: 700; letter-spacing: -0.3px; }
+    .topbar-brand h1 span { color: var(--accent2); }
+    .badge-openenv {
+      font-size: 10px; font-weight: 600; letter-spacing: 0.8px;
+      color: var(--accent2); background: rgba(99,102,241,0.15);
+      border: 1px solid rgba(99,102,241,0.3);
+      border-radius: 99px; padding: 3px 10px;
+    }
+    .server-status { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--text2); }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; }
+    .dot.red { background: var(--red); animation: none; }
+    @keyframes pulse { 0%,100%{ opacity:1; } 50%{ opacity:0.4; } }
+
+    /* ── Main grid ────────────────────────────────────── */
+    .main { display: grid; grid-template-columns: 290px 1fr 300px; gap: 0; flex: 1; }
+
+    /* ── Sidebar ──────────────────────────────────────── */
+    .sidebar {
+      padding: 24px 16px;
+      border-right: 1px solid var(--border);
+      display: flex; flex-direction: column; gap: 20px;
+      background: var(--bg2);
+    }
+    .section-label { font-size: 10px; font-weight: 700; letter-spacing: 1.2px; color: var(--text3); text-transform: uppercase; margin-bottom: 8px; }
+
+    .task-card {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px;
+      cursor: pointer;
+      transition: all 0.2s;
+      background: var(--glass);
+      position: relative; overflow: hidden;
+    }
+    .task-card:hover { border-color: rgba(99,102,241,0.4); background: rgba(99,102,241,0.07); transform: translateY(-1px); }
+    .task-card.active { border-color: var(--accent); background: rgba(99,102,241,0.12); }
+    .task-card.active::before {
+      content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+      background: var(--accent); border-radius: 0 2px 2px 0;
+    }
+    .task-title { font-size: 12px; font-weight: 600; margin-bottom: 4px; }
+    .task-desc { font-size: 11px; color: var(--text2); line-height: 1.45; }
+    .task-badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 10px; font-weight: 600; border-radius: 99px;
+      padding: 2px 8px; margin-bottom: 6px;
+    }
+    .badge-easy   { background: rgba(34,197,94,0.15);  color: var(--green);  border: 1px solid rgba(34,197,94,0.25); }
+    .badge-medium { background: rgba(234,179,8,0.15);  color: var(--yellow); border: 1px solid rgba(234,179,8,0.25); }
+    .badge-hard   { background: rgba(239,68,68,0.15);  color: var(--red);    border: 1px solid rgba(239,68,68,0.25); }
+
+    .seed-row { display: flex; align-items: center; gap: 8px; }
+    .seed-row label { font-size: 12px; color: var(--text2); white-space: nowrap; }
+    input[type=number] {
+      flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm);
+      color: var(--text); font-family: 'JetBrains Mono', monospace; font-size: 13px;
+      padding: 7px 10px; outline: none; transition: border-color 0.2s;
+    }
+    input[type=number]:focus { border-color: var(--accent); }
+
+    .btn {
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 600;
+      border: none; border-radius: var(--radius-sm); cursor: pointer;
+      padding: 10px 16px; transition: all 0.18s; letter-spacing: 0.1px;
+    }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { background: var(--accent2); transform: translateY(-1px); box-shadow: 0 4px 16px rgba(99,102,241,0.4); }
+    .btn-primary:active { transform: translateY(0); }
+    .btn-ghost {
+      background: var(--glass); color: var(--text2);
+      border: 1px solid var(--border);
+    }
+    .btn-ghost:hover { background: var(--glass-b); color: var(--text); }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none !important; box-shadow: none !important; }
+
+    /* ── Stats row ───────────────────────────────────── */
+    .stats { display: flex; flex-direction: column; gap: 8px; }
+    .stat-row { display: flex; justify-content: space-between; align-items: center; font-size: 12px; }
+    .stat-label { color: var(--text2); }
+    .stat-val { font-weight: 600; font-family: 'JetBrains Mono', monospace; }
+    .stat-val.green { color: var(--green); }
+    .stat-val.yellow { color: var(--yellow); }
+    .stat-val.red { color: var(--red); }
+
+    /* Reward bar */
+    .reward-bar-wrap { margin-top: 4px; }
+    .reward-bar-bg { height: 6px; background: rgba(255,255,255,0.06); border-radius: 99px; overflow: hidden; }
+    .reward-bar-fill {
+      height: 100%; border-radius: 99px;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      transition: width 0.4s ease;
+    }
+
+    /* ── Email Panel (center) ─────────────────────────── */
+    .email-panel {
+      padding: 28px 32px;
+      display: flex; flex-direction: column; gap: 20px;
+      overflow-y: auto;
+    }
+
+    .empty-state {
+      flex: 1; display: flex; flex-direction: column; align-items: center;
+      justify-content: center; gap: 12px; color: var(--text2); text-align: center;
+      padding: 60px 0;
+    }
+    .empty-state .icon { font-size: 52px; opacity: 0.5; }
+    .empty-state p { font-size: 14px; max-width: 280px; line-height: 1.6; }
+
+    .email-envelope {
+      background: var(--glass);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      animation: slideIn 0.3s ease;
+    }
+    @keyframes slideIn { from { opacity:0; transform: translateY(10px); } to { opacity:1; transform: translateY(0); } }
+
+    .email-header {
+      padding: 18px 22px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(255,255,255,0.02);
+    }
+    .email-subject { font-size: 17px; font-weight: 700; margin-bottom: 10px; line-height: 1.3; }
+    .email-meta { display: flex; flex-wrap: wrap; gap: 16px; }
+    .email-meta-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text2); }
+    .email-meta-item strong { color: var(--text); }
+    .meta-icon { font-size: 13px; }
+
+    .email-chips { display: flex; gap: 8px; padding: 12px 22px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+    .chip {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 11px; font-weight: 500; border-radius: 99px;
+      padding: 3px 10px; background: var(--glass); border: 1px solid var(--border);
+      color: var(--text2);
+    }
+    .chip.highlight { color: var(--accent2); border-color: rgba(99,102,241,0.3); background: rgba(99,102,241,0.08); }
+
+    .email-body {
+      padding: 20px 22px;
+      font-size: 14px; line-height: 1.75; color: #cbd5e1;
+      white-space: pre-wrap; font-family: 'Inter', sans-serif;
+    }
+
+    /* Progress strip */
+    .progress-strip { display: flex; align-items: center; gap: 12px; }
+    .progress-strip .label { font-size: 12px; color: var(--text2); white-space: nowrap; }
+    .progress-track { flex: 1; height: 4px; background: rgba(255,255,255,0.06); border-radius: 99px; overflow: hidden; }
+    .progress-fill { height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--accent), #a78bfa); transition: width 0.5s ease; }
+    .progress-strip .count { font-size: 12px; color: var(--text2); white-space: nowrap; font-family: 'JetBrains Mono', monospace; }
+
+    /* Done splash */
+    .done-card {
+      border: 1px solid rgba(34,197,94,0.3);
+      background: rgba(34,197,94,0.06);
+      border-radius: var(--radius);
+      padding: 28px; text-align: center;
+      animation: slideIn 0.4s ease;
+    }
+    .done-card .score-big { font-size: 52px; font-weight: 800; background: linear-gradient(135deg, var(--green), #86efac); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .done-card h2 { font-size: 18px; margin: 8px 0 4px; }
+    .done-card p { font-size: 13px; color: var(--text2); }
+
+    /* ── Action Panel (right) ─────────────────────────── */
+    .action-panel {
+      border-left: 1px solid var(--border);
+      background: var(--bg2);
+      padding: 24px 18px;
+      display: flex; flex-direction: column; gap: 20px;
+      overflow-y: auto;
+    }
+
+    .form-group { display: flex; flex-direction: column; gap: 6px; }
+    .form-label { font-size: 11px; font-weight: 600; color: var(--text2); letter-spacing: 0.5px; }
+    select {
+      background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm);
+      color: var(--text); font-family: 'Inter', sans-serif; font-size: 13px;
+      padding: 9px 12px; outline: none; transition: border-color 0.2s; width: 100%;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2394a3b8' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 12px center;
+      padding-right: 32px;
+    }
+    select:focus { border-color: var(--accent); }
+
+    textarea {
+      background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm);
+      color: var(--text); font-family: 'Inter', sans-serif; font-size: 13px;
+      padding: 10px 12px; outline: none; resize: vertical; line-height: 1.5;
+      transition: border-color 0.2s; width: 100%;
+    }
+    textarea:focus { border-color: var(--accent); }
+    textarea::placeholder { color: var(--text3); }
+
+    .checkbox-row { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+    .checkbox-row input { accent-color: var(--accent); width: 15px; height: 15px; }
+    .checkbox-row span { font-size: 13px; color: var(--text2); }
+
+    .divider { height: 1px; background: var(--border); }
+
+    /* Reward feedback card */
+    .reward-card {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 14px;
+      background: var(--glass);
+      font-size: 12px;
+      animation: slideIn 0.25s ease;
+    }
+    .reward-card .r-title { font-weight: 700; margin-bottom: 10px; font-size: 13px; }
+    .reward-row { display: flex; justify-content: space-between; align-items: center; padding: 3px 0; }
+    .reward-icon { margin-right: 4px; }
+    .check { color: var(--green); }
+    .cross { color: var(--red); }
+    .r-val { font-family: 'JetBrains Mono', monospace; font-weight: 600; }
+    .r-val.pos { color: var(--green); }
+    .r-val.neg { color: var(--red); }
+    .r-val.zero { color: var(--text2); }
+
+    /* History list */
+    .history-list { display: flex; flex-direction: column; gap: 6px; max-height: 220px; overflow-y: auto; }
+    .history-item {
+      display: flex; align-items: center; justify-content: space-between;
+      font-size: 11px; padding: 6px 10px; border-radius: 6px;
+      background: var(--glass); border: 1px solid var(--border);
+    }
+    .history-item .h-id { font-family: 'JetBrains Mono', monospace; color: var(--text2); }
+    .history-item .h-label { font-weight: 600; color: var(--accent2); }
+    .history-item .h-reward { font-family: 'JetBrains Mono', monospace; font-weight: 600; }
+
+    /* Toast */
+    #toast {
+      position: fixed; bottom: 24px; right: 24px; z-index: 999;
+      background: #1e293b; border: 1px solid var(--border); border-radius: var(--radius-sm);
+      padding: 12px 18px; font-size: 13px; color: var(--text);
+      box-shadow: var(--shadow);
+      transform: translateY(80px); opacity: 0;
+      transition: all 0.3s ease; pointer-events: none;
+    }
+    #toast.show { transform: translateY(0); opacity: 1; }
+    #toast.error { border-color: rgba(239,68,68,0.5); background: rgba(239,68,68,0.1); }
+
+    /* Spinner */
+    .spinner {
+      width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.2);
+      border-top-color: #fff; border-radius: 50%; animation: spin 0.7s linear infinite; display: none;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading .spinner { display: inline-block; }
+    .loading .btn-text { display: none; }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
+
+    @media (max-width: 900px) {
+      .main { grid-template-columns: 1fr; }
+      .action-panel { border-left: none; border-top: 1px solid var(--border); }
+      .sidebar { border-right: none; border-bottom: 1px solid var(--border); }
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ── Top Bar ───────────────────────────────────────── -->
+  <nav class="topbar">
+    <div class="topbar-brand">
+      <span class="logo">📧</span>
+      <h1>Email Triage <span>OpenEnv</span></h1>
+      <span class="badge-openenv">OPENENV</span>
+    </div>
+    <div class="server-status">
+      <span class="dot" id="statusDot"></span>
+      <span id="statusText">Connecting…</span>
+      <span>&nbsp;·</span>
+      <a href="/docs" target="_blank" style="color:var(--accent2);text-decoration:none;font-size:12px;">API Docs ↗</a>
+    </div>
+  </nav>
+
+  <!-- ── Main ──────────────────────────────────────────── -->
+  <div class="main">
+
+    <!-- ── Sidebar ───────────────────────────────────── -->
+    <aside class="sidebar">
+      <div>
+        <div class="section-label">Select Task</div>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+
+          <div class="task-card active" id="task-single_label_classification" onclick="selectTask('single_label_classification')">
+            <div class="task-badge badge-easy">🟢 Easy</div>
+            <div class="task-title">Label Classification</div>
+            <div class="task-desc">Classify 10 emails into 6 categories</div>
+          </div>
+
+          <div class="task-card" id="task-priority_triage_with_routing" onclick="selectTask('priority_triage_with_routing')">
+            <div class="task-badge badge-medium">🟡 Medium</div>
+            <div class="task-title">Priority Triage + Routing</div>
+            <div class="task-desc">Label + priority + team routing for 20 emails</div>
+          </div>
+
+          <div class="task-card" id="task-inbox_zero_with_sla" onclick="selectTask('inbox_zero_with_sla')">
+            <div class="task-badge badge-hard">🔴 Hard</div>
+            <div class="task-title">Inbox Zero + SLA</div>
+            <div class="task-desc">Full triage, replies & SLA deadlines — 30 emails</div>
+          </div>
+
+        </div>
+      </div>
+
+      <div>
+        <div class="section-label">Seed</div>
+        <div class="seed-row">
+          <label>Seed</label>
+          <input type="number" id="seedInput" value="42" min="0" max="99999" />
+        </div>
+      </div>
+
+      <button class="btn btn-primary" id="resetBtn" onclick="handleReset()">
+        <span class="spinner"></span>
+        <span class="btn-text">⟳ &nbsp;Start Episode</span>
+      </button>
+
+      <div class="divider"></div>
+
+      <div>
+        <div class="section-label">Episode Stats</div>
+        <div class="stats">
+          <div class="stat-row"><span class="stat-label">Task</span><span class="stat-val" id="statTask">—</span></div>
+          <div class="stat-row"><span class="stat-label">Step</span><span class="stat-val" id="statStep">0 / 0</span></div>
+          <div class="stat-row"><span class="stat-label">SLA Violations</span><span class="stat-val red" id="statSLA">0</span></div>
+          <div class="stat-row"><span class="stat-label">Cumulative Reward</span><span class="stat-val green" id="statReward">0.00</span></div>
+          <div class="reward-bar-wrap">
+            <div class="reward-bar-bg"><div class="reward-bar-fill" id="rewardBar" style="width:0%"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="section-label">Step History</div>
+        <div class="history-list" id="historyList">
+          <div style="font-size:12px;color:var(--text3);padding:6px 0;">No actions yet.</div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ── Email Panel ────────────────────────────────── -->
+    <main class="email-panel" id="emailPanel">
+      <div class="empty-state" id="emptyState">
+        <div class="icon">📭</div>
+        <h2 style="font-size:18px;font-weight:700;">Inbox Ready</h2>
+        <p>Select a task and click <strong>Start Episode</strong> to begin processing emails.</p>
+      </div>
+    </main>
+
+    <!-- ── Action Panel ───────────────────────────────── -->
+    <aside class="action-panel">
+      <div>
+        <div class="section-label">Classify Email</div>
+      </div>
+
+      <div class="form-group">
+        <div class="form-label">LABEL</div>
+        <select id="labelSelect">
+          <option value="work">📁 Work</option>
+          <option value="personal">👤 Personal</option>
+          <option value="spam">🚫 Spam</option>
+          <option value="newsletter">📰 Newsletter</option>
+          <option value="urgent">🚨 Urgent</option>
+          <option value="support">🎧 Support</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <div class="form-label">PRIORITY</div>
+        <select id="prioritySelect">
+          <option value="low">🔵 Low</option>
+          <option value="medium">🟡 Medium</option>
+          <option value="high">🟠 High</option>
+          <option value="critical">🔴 Critical</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <div class="form-label">ROUTE TO</div>
+        <select id="routeSelect">
+          <option value="ignore">⊘ Ignore</option>
+          <option value="engineering">⚙️ Engineering</option>
+          <option value="sales">💼 Sales</option>
+          <option value="support">🎧 Support</option>
+          <option value="hr">👥 HR</option>
+          <option value="finance">💰 Finance</option>
+        </select>
+      </div>
+
+      <div class="form-group" id="replyGroup">
+        <div class="form-label">DRAFT REPLY <span style="color:var(--text3);font-weight:400;">(optional)</span></div>
+        <textarea id="replyText" rows="4" placeholder="Type a reply for urgent/support emails…"></textarea>
+      </div>
+
+      <div class="checkbox-row">
+        <input type="checkbox" id="archiveCheck" />
+        <span>Archive email (good for spam/newsletters)</span>
+      </div>
+
+      <button class="btn btn-primary" id="submitBtn" onclick="handleStep()" disabled>
+        <span class="spinner"></span>
+        <span class="btn-text">Submit Action →</span>
+      </button>
+
+      <div class="divider"></div>
+
+      <div id="rewardCard" style="display:none;"></div>
+
+      <div>
+        <div class="section-label">Episode Score</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+          <div style="font-size:36px;font-weight:800;font-family:'JetBrains Mono',monospace;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;" id="scoreDisplay">—</div>
+          <button class="btn btn-ghost" style="font-size:12px;padding:8px 12px;" onclick="fetchGrade()">Refresh ⟳</button>
+        </div>
+      </div>
+
+    </aside>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<script>
+/* ── State ─────────────────────────────────────────────── */
+const API = '';
+let currentObs = null;
+let currentTaskId = 'single_label_classification';
+let episodeHistory = [];
+let emailsTotal = 0;
+
+/* ── Helpers ───────────────────────────────────────────── */
+function toast(msg, isError = false) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'show' + (isError ? ' error' : '');
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.className = '', 3000);
+}
+
+function setLoading(btnId, on) {
+  const btn = document.getElementById(btnId);
+  btn.classList.toggle('loading', on);
+  btn.disabled = on;
+}
+
+async function apiFetch(path, opts = {}) {
+  const res = await fetch(API + path, {
+    headers: { 'Content-Type': 'application/json' },
+    ...opts,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || 'Request failed');
+  }
+  return res.json();
+}
+
+/* ── Server status check ───────────────────────────────── */
+async function checkStatus() {
+  try {
+    await apiFetch('/health');
+    document.getElementById('statusDot').className = 'dot';
+    document.getElementById('statusText').textContent = 'Server live';
+  } catch {
+    document.getElementById('statusDot').className = 'dot red';
+    document.getElementById('statusText').textContent = 'Offline';
+  }
+}
+
+/* ── Task selection ────────────────────────────────────── */
+function selectTask(taskId) {
+  currentTaskId = taskId;
+  document.querySelectorAll('.task-card').forEach(c => c.classList.remove('active'));
+  document.getElementById('task-' + taskId).classList.add('active');
+}
+
+/* ── Reset ─────────────────────────────────────────────── */
+async function handleReset() {
+  setLoading('resetBtn', true);
+  try {
+    const seed = parseInt(document.getElementById('seedInput').value) || 42;
+    const obs = await apiFetch('/reset', {
+      method: 'POST',
+      body: JSON.stringify({ task_id: currentTaskId, seed }),
+    });
+    currentObs = obs;
+    emailsTotal = obs.emails_remaining + 1;
+    episodeHistory = [];
+
+    // Render
+    renderEmail(obs);
+    updateStats(obs, null);
+    document.getElementById('submitBtn').disabled = false;
+    document.getElementById('rewardCard').style.display = 'none';
+    document.getElementById('scoreDisplay').textContent = '—';
+    renderHistory();
+    toast('Episode started! 📬');
+  } catch (e) {
+    toast('Reset failed: ' + e.message, true);
+  }
+  setLoading('resetBtn', false);
+}
+
+/* ── Step ──────────────────────────────────────────────── */
+async function handleStep() {
+  if (!currentObs) { toast('Start an episode first.', true); return; }
+  setLoading('submitBtn', true);
+
+  const action = {
+    email_id:    currentObs.email_id,
+    label:       document.getElementById('labelSelect').value,
+    priority:    document.getElementById('prioritySelect').value,
+    route_to:    document.getElementById('routeSelect').value,
+    draft_reply: document.getElementById('replyText').value.trim() || null,
+    archive:     document.getElementById('archiveCheck').checked,
+  };
+
+  try {
+    const resp = await apiFetch('/step', { method: 'POST', body: JSON.stringify(action) });
+    const reward = resp.reward;
+
+    episodeHistory.push({
+      email_id: currentObs.email_id,
+      label: action.label,
+      step_reward: reward.step_reward,
+    });
+
+    renderRewardCard(reward);
+    renderHistory();
+
+    if (resp.done) {
+      currentObs = null;
+      document.getElementById('submitBtn').disabled = true;
+      await fetchGrade();
+      renderDone();
+    } else {
+      currentObs = resp.observation;
+      renderEmail(currentObs);
+      updateStats(currentObs, reward);
+      // Reset form
+      document.getElementById('replyText').value = '';
+      document.getElementById('archiveCheck').checked = false;
+    }
+  } catch (e) {
+    toast('Step failed: ' + e.message, true);
+  }
+  setLoading('submitBtn', false);
+}
+
+/* ── Grade ─────────────────────────────────────────────── */
+async function fetchGrade() {
+  try {
+    const data = await apiFetch('/grader', { method: 'POST' });
+    const pct = Math.round(data.score * 100);
+    document.getElementById('scoreDisplay').textContent = pct + '%';
+    return data.score;
+  } catch {}
+}
+
+/* ── Render helpers ─────────────────────────────────────── */
+function renderEmail(obs) {
+  const panel = document.getElementById('emailPanel');
+  const progress = emailsTotal > 0 ? ((emailsTotal - obs.emails_remaining) / emailsTotal * 100) : 0;
+
+  panel.innerHTML = `
+    <div class="progress-strip">
+      <span class="label">Progress</span>
+      <div class="progress-track"><div class="progress-fill" style="width:${progress}%"></div></div>
+      <span class="count">${emailsTotal - obs.emails_remaining} / ${emailsTotal}</span>
+    </div>
+
+    <div class="email-envelope">
+      <div class="email-header">
+        <div class="email-subject">${escHtml(obs.subject)}</div>
+        <div class="email-meta">
+          <div class="email-meta-item">
+            <span class="meta-icon">👤</span>
+            <span><strong>${escHtml(obs.sender)}</strong> &lt;${escHtml(obs.sender_domain)}&gt;</span>
+          </div>
+          <div class="email-meta-item">
+            <span class="meta-icon">🕐</span>
+            <span>${formatTime(obs.timestamp)}</span>
+          </div>
+          <div class="email-meta-item">
+            <span class="meta-icon">💬</span>
+            <span>${obs.thread_length} message${obs.thread_length !== 1 ? 's' : ''} in thread</span>
+          </div>
+        </div>
+      </div>
+      <div class="email-chips">
+        <span class="chip">📧 Email ${obs.step + 1} of ${emailsTotal}</span>
+        <span class="chip">${obs.emails_remaining} remaining</span>
+        ${obs.has_attachments ? '<span class="chip highlight">📎 Has attachments</span>' : ''}
+        <span class="chip">🎯 ${obs.task_id.replace(/_/g,' ')}</span>
+      </div>
+      <div class="email-body">${escHtml(obs.body)}</div>
+    </div>
+  `;
+}
+
+function renderDone() {
+  const panel = document.getElementById('emailPanel');
+  const scoreEl = document.getElementById('scoreDisplay');
+  const pct = scoreEl.textContent !== '—' ? scoreEl.textContent : '?';
+
+  panel.innerHTML += `
+    <div class="done-card">
+      <div class="score-big">${pct}</div>
+      <h2>Episode Complete 🎉</h2>
+      <p>All emails processed. Start a new episode to try again.</p>
+    </div>
+  `;
+}
+
+function renderRewardCard(r) {
+  const card = document.getElementById('rewardCard');
+  const sign = v => v > 0 ? 'pos' : v < 0 ? 'neg' : 'zero';
+  const fmt = v => (v > 0 ? '+' : '') + v.toFixed(3);
+
+  card.innerHTML = `
+    <div class="reward-card">
+      <div class="r-title">Step Reward: <span class="r-val ${sign(r.step_reward)}">${fmt(r.step_reward)}</span></div>
+      <div class="reward-row"><span><span class="reward-icon">${r.label_correct ? '✅' : '❌'}</span> Label</span><span class="r-val ${r.label_correct ? 'pos' : 'neg'}">${r.label_correct ? '+0.30' : '0.00'}</span></div>
+      <div class="reward-row"><span><span class="reward-icon">${r.priority_correct ? '✅' : '❌'}</span> Priority</span><span class="r-val ${r.priority_correct ? 'pos' : 'neg'}">${r.priority_correct ? '+0.20' : '0.00'}</span></div>
+      <div class="reward-row"><span><span class="reward-icon">${r.routing_correct ? '✅' : '❌'}</span> Routing</span><span class="r-val ${r.routing_correct ? 'pos' : 'neg'}">${r.routing_correct ? '+0.20' : '0.00'}</span></div>
+      ${r.reply_quality > 0 ? `<div class="reward-row"><span>💬 Reply Quality</span><span class="r-val pos">+${(r.reply_quality * 0.2).toFixed(2)}</span></div>` : ''}
+      ${r.sla_violated ? '<div class="reward-row"><span>⏰ SLA Violation</span><span class="r-val neg">−0.50</span></div>' : ''}
+      ${r.penalties < 0 ? `<div class="reward-row"><span>⚠ Penalties</span><span class="r-val neg">${fmt(r.penalties)}</span></div>` : ''}
+      <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);">
+        <div class="reward-row"><span style="font-weight:600;">Cumulative</span><span class="r-val pos" style="font-size:14px;">${fmt(r.cumulative_reward)}</span></div>
+      </div>
+    </div>
+  `;
+  card.style.display = 'block';
+}
+
+function renderHistory() {
+  const list = document.getElementById('historyList');
+  if (episodeHistory.length === 0) {
+    list.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:6px 0;">No actions yet.</div>';
+    return;
+  }
+  list.innerHTML = episodeHistory.slice().reverse().map(h => {
+    const rClass = h.step_reward > 0 ? 'pos' : h.step_reward < 0 ? 'neg' : 'zero';
+    return `<div class="history-item">
+      <span class="h-id">${h.email_id}</span>
+      <span class="h-label">${h.label}</span>
+      <span class="h-reward r-val ${rClass}">${(h.step_reward > 0 ? '+' : '') + h.step_reward.toFixed(2)}</span>
+    </div>`;
+  }).join('');
+}
+
+function updateStats(obs, reward) {
+  const taskShort = { single_label_classification: 'Easy', priority_triage_with_routing: 'Medium', inbox_zero_with_sla: 'Hard' };
+  document.getElementById('statTask').textContent = taskShort[obs.task_id] || obs.task_id;
+  document.getElementById('statStep').textContent = `${obs.step} / ${emailsTotal}`;
+  if (reward) {
+    const r = reward.cumulative_reward;
+    const maxR = emailsTotal * 1.0;
+    document.getElementById('statReward').textContent = (r >= 0 ? '+' : '') + r.toFixed(3);
+    document.getElementById('statReward').className = 'stat-val ' + (r >= 0 ? 'green' : 'red');
+    document.getElementById('rewardBar').style.width = Math.max(0, Math.min(100, (r / maxR) * 100)) + '%';
+  }
+}
+
+function escHtml(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function formatTime(iso) {
+  try { return new Date(iso).toLocaleString(); } catch { return iso; }
+}
+
+/* ── Init ──────────────────────────────────────────────── */
+checkStatus();
+setInterval(checkStatus, 30000);
+</script>
+</body>
+</html>

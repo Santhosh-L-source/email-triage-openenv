@@ -1,0 +1,71 @@
+name: email-triage-env
+version: "1.0.0"
+description: >
+  A real-world email triage environment where AI agents classify, prioritize,
+  route, and respond to realistic synthetic emails. Simulates the daily inbox
+  management task performed by knowledge workers — checking labels, urgency,
+  correct team routing, and composing appropriate replies under SLA constraints.
+author: "OpenEnv Submission"
+homepage: "https://huggingface.co/spaces/openenv-email-triage"
+
+tasks:
+  - id: single_label_classification
+    difficulty: easy
+    description: >
+      Classify 10 emails into one of 6 labels: work, personal, spam,
+      newsletter, urgent, or support. Pure classification, no routing needed.
+    n_emails: 10
+    score_range: [0.0, 1.0]
+
+  - id: priority_triage_with_routing
+    difficulty: medium
+    description: >
+      Process 20 emails assigning correct label, priority (low/medium/high/critical),
+      and team routing (engineering/sales/support/hr/finance/ignore).
+      Score is weighted: label 40%, priority 30%, routing 30%.
+    n_emails: 20
+    score_range: [0.0, 1.0]
+
+  - id: inbox_zero_with_sla
+    difficulty: hard
+    description: >
+      Process 30 emails under SLA time pressure. Critical/urgent emails must be
+      handled within their deadline window. Support and urgent emails require
+      a draft reply (scored via ROUGE-L). Score: label 20%, priority 20%,
+      routing 20%, reply quality 20%, SLA compliance 20%.
+    n_emails: 30
+    score_range: [0.0, 1.0]
+
+observation_space:
+  type: EmailObservation
+  fields:
+    - email_id: string
+    - subject: string
+    - sender: string
+    - sender_domain: string
+    - body: string (truncated to 800 chars)
+    - timestamp: string (ISO 8601)
+    - thread_length: integer
+    - has_attachments: boolean
+    - inbox_position: integer
+    - task_id: string
+    - step: integer
+    - emails_remaining: integer
+
+action_space:
+  type: EmailAction
+  fields:
+    - email_id: string
+    - label: "enum[work, personal, spam, newsletter, urgent, support]"
+    - priority: "enum[low, medium, high, critical]"
+    - route_to: "enum[engineering, sales, support, hr, finance, ignore]"
+    - draft_reply: "string | null"
+    - archive: boolean
+
+reward_range: [-1.0, 1.0]
+reward_shaping: true
+reward_description: >
+  Shaped reward at every step. Credits: label correct (+0.30), priority correct (+0.20),
+  routing correct (+0.20), spam archived (+0.10), reply quality ROUGE-L≥0.5 (+0.20).
+  Penalties: urgent deprioritized (-0.30), SLA missed (-0.50), bad reply (-0.10),
+  invalid action (-0.20).
