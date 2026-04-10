@@ -20,7 +20,7 @@ from pathlib import Path
 import time
 from typing import Any, Dict, List, Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Body, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -118,11 +118,14 @@ async def health():
 
 
 @app.post("/reset", response_model=EmailObservation, tags=["openenv"])
-async def reset(body: ResetRequest):
+async def reset(body: Optional[ResetRequest] = Body(default=None)):
     """
     Reset the environment for a specific task and seed.
     Returns the first email observation.
+    Accepts empty body — defaults to task='single_label_classification', seed=42.
     """
+    if body is None:
+        body = ResetRequest()
     try:
         obs = _env.reset(task_id=body.task_id, seed=body.seed)
     except ValueError as e:
