@@ -29,6 +29,11 @@ from typing import Any, Dict, Optional
 
 import requests
 
+
+def _clamp(score: float) -> float:
+    """Ensure score is strictly between 0 and 1 (exclusive) as required by the validator."""
+    return max(0.001, min(0.999, float(score)))
+
 # ---------------------------------------------------------------------------
 # Configuration — read from environment variables (mandatory)
 # ---------------------------------------------------------------------------
@@ -214,7 +219,7 @@ def run_task(task_id: str, base_url: str, client: Any) -> Dict[str, Any]:
     grade_resp = r.json()
 
     elapsed = time.time() - t0
-    score   = grade_resp["score"]
+    score   = _clamp(grade_resp["score"])
 
     # Emit [END] log
     log_end(task_id=task_id, score=score, steps=step, elapsed_seconds=elapsed)
