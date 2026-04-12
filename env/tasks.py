@@ -156,7 +156,7 @@ def grade_episode(
 
     n = len(records)
     if n == 0 or len(actions) == 0:
-        return 0.0, {"error": "No actions recorded"}
+        return _clamp(0.0), {"error": "No actions recorded"}
 
     task = TASKS[task_id]
 

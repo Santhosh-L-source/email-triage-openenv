@@ -175,10 +175,12 @@ async def tasks():
 async def grader():
     """
     Grade the current (or completed) episode.
-    Returns a score in [0.0, 1.0] and a detailed breakdown.
+    Returns a score strictly in (0, 1) exclusive, and a detailed breakdown.
     """
     score, details = _env.grade()
-    return {"score": score, "details": details}
+    # Clamp strictly to (0, 1) exclusive as required by the validator
+    score = max(0.001, min(0.999, float(score)))
+    return {"score": round(score, 4), "details": details}
 
 
 @app.post("/baseline", response_model=BaselineResponse, tags=["openenv"])
