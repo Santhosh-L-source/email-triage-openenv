@@ -109,6 +109,11 @@ def list_tasks() -> List[Dict[str, Any]]:
 # Graders
 # ---------------------------------------------------------------------------
 
+def _clamp(score: float) -> float:
+    """Clamp score to strictly (0, 1) exclusive as required by the validator."""
+    return max(0.001, min(0.999, score))
+
+
 def _rouge_l(prediction: str, reference: str) -> float:
     """LCS-based ROUGE-L (no external deps)."""
     if not prediction or not reference:
@@ -173,13 +178,13 @@ def grade_episode(
 
     # ── Task 1: label only ─────────────────────────────────────────────────
     if task_id == "single_label_classification":
-        score = label_acc
+        score = _clamp(label_acc)
         details["score"] = round(score, 4)
         return round(score, 4), details
 
     # ── Task 2: label 40% + priority 30% + routing 30% ────────────────────
     if task_id == "priority_triage_with_routing":
-        score = 0.4 * label_acc + 0.3 * priority_acc + 0.3 * routing_acc
+        score = _clamp(0.4 * label_acc + 0.3 * priority_acc + 0.3 * routing_acc)
         details["score"] = round(score, 4)
         return round(score, 4), details
 
@@ -199,7 +204,7 @@ def grade_episode(
         max_sla_emails = sum(1 for r in records if r.sla_steps is not None)
         sla_score = max(0.0, 1.0 - (sla_violations / max_sla_emails)) if max_sla_emails > 0 else 1.0
 
-        score = (
+        score = _clamp(
             0.20 * label_acc
             + 0.20 * priority_acc
             + 0.20 * routing_acc
@@ -212,4 +217,4 @@ def grade_episode(
         details["score"] = round(score, 4)
         return round(score, 4), details
 
-    return 0.0, details
+    return _clamp(0.0), details
